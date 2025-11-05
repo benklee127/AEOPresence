@@ -1,11 +1,13 @@
 import { base44 } from './base44Client';
+import { InvokeLLM as InvokeLLMProvider } from './llmProvider';
 
 
 
 
 export const Core = base44.integrations.Core;
 
-export const InvokeLLM = base44.integrations.Core.InvokeLLM;
+// Use LLM provider abstraction for InvokeLLM (supports Base44 and Gemini)
+export const InvokeLLM = InvokeLLMProvider;
 
 export const SendEmail = base44.integrations.Core.SendEmail;
 

@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { base44 } from "@/api/base44Client";
+import { InvokeLLM } from "@/api/integrations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -150,7 +151,7 @@ Return a JSON array with EXACTLY ${targetCount} items in this structure:
 
 IMPORTANT: The array MUST contain exactly ${targetCount} query objects. Count them to make sure.`;
 
-      const response = await base44.integrations.Core.InvokeLLM({
+      const response = await InvokeLLM({
         prompt,
         response_json_schema: {
           type: "object",
@@ -203,7 +204,7 @@ These queries must be:
 Return JSON array with exactly ${remaining} queries using this structure:
 [{"query_id": ${generatedQueries.length + 1}, "query_text": "...", "query_type": "Educational or Service-Aligned", "query_category": "one of the categories", "query_format": "Natural-language questions or Keyword phrases", "target_audience": "one of the audiences"}]`;
 
-        const additionalResponse = await base44.integrations.Core.InvokeLLM({
+        const additionalResponse = await InvokeLLM({
           prompt: additionalPrompt,
           response_json_schema: {
             type: "object",

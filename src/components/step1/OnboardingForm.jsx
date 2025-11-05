@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { base44 } from "@/api/base44Client";
+import { InvokeLLM } from "@/api/integrations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -118,7 +119,7 @@ export default function OnboardingForm({ project, onComplete }) {
     try {
       setDetectedNiche('🔍 Analyzing company focus...');
       
-      const nicheResponse = await base44.integrations.Core.InvokeLLM({
+      const nicheResponse = await InvokeLLM({
         prompt: `Analyze this company's website: ${formData.company_url}
 
 GOAL: Identify their SPECIFIC BUSINESS NICHE/FOCUS with extreme precision.
@@ -202,7 +203,7 @@ Return JSON:
   "competitors": ["https://realcompetitor1.com", "https://realcompetitor2.com", ...]
 }`;
 
-      const response = await base44.integrations.Core.InvokeLLM({
+      const response = await InvokeLLM({
         prompt: competitorPrompt,
         add_context_from_internet: true,
         response_json_schema: {
@@ -282,7 +283,7 @@ Return JSON:
 
     setIsAnalyzingUrl(true);
     try {
-      const response = await base44.integrations.Core.InvokeLLM({
+      const response = await InvokeLLM({
         prompt: `Analyze this website: ${formData.company_url}
 
 Based on the website content, suggest 3-5 key themes and focus areas that would be relevant for AEO query generation in the financial services industry. 
