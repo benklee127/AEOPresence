@@ -761,42 +761,112 @@ export function createCustomClient() {
         return { success: true };
       },
 
-      // Backend functions - these need to be implemented as Supabase Edge Functions
-      // or other serverless functions. See BACKEND_FUNCTIONS.md for implementation guide.
+      // Backend functions - Supabase Edge Functions
+      // These call the serverless functions deployed to Supabase
 
       generateQueries: async (params) => {
-        console.warn("generateQueries called with params:", params);
-        throw new Error(
-          "generateQueries needs to be implemented. See BACKEND_FUNCTIONS.md for implementation guide."
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/generate-queries`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify(params),
+          }
         );
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to generate queries");
+        }
+
+        return response.json();
       },
 
       analyzeQueries: async (params) => {
-        console.warn("analyzeQueries called with params:", params);
-        throw new Error(
-          "analyzeQueries needs to be implemented. See BACKEND_FUNCTIONS.md for implementation guide."
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/analyze-queries`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify(params),
+          }
         );
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to analyze queries");
+        }
+
+        return response.json();
       },
 
       exportStep3Report: async (params) => {
-        console.warn("exportStep3Report called with params:", params);
-        throw new Error(
-          "exportStep3Report needs to be implemented. See BACKEND_FUNCTIONS.md for implementation guide."
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/export-step3-report`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify(params),
+          }
         );
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to export report");
+        }
+
+        return response.json();
       },
 
       resetStuckQueries: async (params) => {
-        console.warn("resetStuckQueries called with params:", params);
-        throw new Error(
-          "resetStuckQueries needs to be implemented. See BACKEND_FUNCTIONS.md for implementation guide."
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/reset-stuck-queries`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify(params),
+          }
         );
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to reset stuck queries");
+        }
+
+        return response.json();
       },
 
       diagnoseStuckQueries: async (params) => {
-        console.warn("diagnoseStuckQueries called with params:", params);
-        throw new Error(
-          "diagnoseStuckQueries needs to be implemented. See BACKEND_FUNCTIONS.md for implementation guide."
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/diagnose-stuck-queries`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${supabaseServiceKey}`,
+            },
+            body: JSON.stringify(params),
+          }
         );
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || "Failed to diagnose stuck queries");
+        }
+
+        return response.json();
       },
     },
     integrations: {
