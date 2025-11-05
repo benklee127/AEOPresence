@@ -674,6 +674,20 @@ export class UserEntity extends CustomEntity {
  * @returns {string} Table name in snake_case
  */
 function entityNameToTableName(entityName) {
+  // Explicit mapping for known entities (handles pluralization)
+  const explicitMappings = {
+    Folder: "folders",
+    QueryProject: "query_projects",
+    Query: "queries",
+    User: "users",
+  };
+
+  // Check for exact match first
+  if (explicitMappings[entityName]) {
+    return explicitMappings[entityName];
+  }
+
+  // Fall back to automatic conversion for other entities
   return entityName
     .replace(/([A-Z])/g, "_$1")
     .toLowerCase()
