@@ -1,8 +1,6 @@
-import { createClient } from '@base44/sdk';
-// import { getAccessToken } from '@base44/sdk/utils/auth-utils';
+// Supabase-backed Base44 compatible client
+// This is a drop-in replacement that maintains 100% API compatibility with Base44
+import { customClient } from "../lib/custom-sdk.js";
 
-// Create a client with authentication required
-export const base44 = createClient({
-  appId: "68f6958fde9a29d0cdb93bac", 
-  requiresAuth: true // Ensure authentication is required for all operations
-});
+// Export the custom client as base44 for compatibility
+export const base44 = customClient;
