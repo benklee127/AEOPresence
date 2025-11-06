@@ -8,6 +8,8 @@ import Step2 from "./Step2";
 
 import Step3 from "./Step3";
 
+import AuthCallback from "./AuthCallback";
+
 import { BrowserRouter as Router, Route, Routes, useLocation } from 'react-router-dom';
 
 const PAGES = {
@@ -39,22 +41,27 @@ function _getCurrentPage(url) {
 function PagesContent() {
     const location = useLocation();
     const currentPage = _getCurrentPage(location.pathname);
-    
+
+    // Auth callback route without layout
+    if (location.pathname === '/auth/callback') {
+        return <AuthCallback />;
+    }
+
     return (
         <Layout currentPageName={currentPage}>
-            <Routes>            
-                
+            <Routes>
+
                     <Route path="/" element={<Dashboard />} />
-                
-                
+
+
                 <Route path="/Dashboard" element={<Dashboard />} />
-                
+
                 <Route path="/Step1" element={<Step1 />} />
-                
+
                 <Route path="/Step2" element={<Step2 />} />
-                
+
                 <Route path="/Step3" element={<Step3 />} />
-                
+
             </Routes>
         </Layout>
     );

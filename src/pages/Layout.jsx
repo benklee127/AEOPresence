@@ -13,10 +13,12 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarHeader,
+  SidebarFooter,
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import AuthStatus from "@/components/AuthStatus";
 
 const navigationItems = [
   {
@@ -111,6 +113,10 @@ export default function Layout({ children, currentPageName }) {
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
+
+          <SidebarFooter className="border-t border-slate-200 p-4">
+            <AuthStatus />
+          </SidebarFooter>
         </Sidebar>
 
         <main className="flex-1 flex flex-col">
