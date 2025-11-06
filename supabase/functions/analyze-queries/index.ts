@@ -1,8 +1,12 @@
 // analyzeQueries - Supabase Edge Function
 // Analyzes queries to determine brand mentions, sources, and refine categorization
+// Now with robust retry logic and rate limiting!
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { analyzeQueryWithRetry, rateLimiter } from "../_shared/gemini-helper.ts";
+import { QueryAnalysisSchema, QueryMetadata, DEFAULT_RETRY_CONFIG } from "../_shared/types.ts";
+import { generateFallbackResult, sanitizeErrorMessage } from "../_shared/validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -74,25 +78,48 @@ serve(async (req) => {
       );
     }
 
+    console.log(`📊 Starting analysis of ${queries.length} queries for project ${project_id}`);
+    console.log(`⚙️  Rate limiter status:`, rateLimiter.getStatus());
+
     let analyzed = 0;
     let errors = 0;
+    let retried = 0;
 
-    // Analyze queries in batches of 5 to avoid rate limits
+    // Process queries in batches of 5 to manage concurrency
     const batchSize = 5;
     for (let i = 0; i < queries.length; i += batchSize) {
       const batch = queries.slice(i, i + batchSize);
 
+      console.log(`\n📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(queries.length / batchSize)} (${batch.length} queries)`);
+
+      // Process batch in parallel with retry logic
       await Promise.all(
-        batch.map(async (query) => {
+        batch.map(async (queryRecord) => {
+          const startTime = Date.now();
+          let attemptCount = 0;
+
           try {
             // Update status to 'analyzing'
             await supabase
               .from("queries")
-              .update({ analysis_status: "analyzing" })
-              .eq("id", query.id);
+              .update({
+                analysis_status: "analyzing",
+                metadata: {
+                  started_at: new Date().toISOString(),
+                  attempt_count: attemptCount,
+                } as QueryMetadata,
+              })
+              .eq("id", queryRecord.id);
 
-            // Analyze the query
-            const analysis = await analyzeSingleQuery(query, project, geminiApiKey);
+            // Analyze query with retry logic and rate limiting
+            const analysis: QueryAnalysisSchema = await analyzeQueryWithRetry(
+              queryRecord,
+              project,
+              geminiApiKey,
+              DEFAULT_RETRY_CONFIG
+            );
+
+            const duration = Date.now() - startTime;
 
             // Update query with analysis results
             await supabase
@@ -100,42 +127,73 @@ serve(async (req) => {
               .update({
                 brand_mentions: analysis.brand_mentions.join(", "),
                 source: analysis.source,
-                query_type: analysis.query_type || query.query_type,
-                query_category: analysis.query_category || query.query_category,
+                query_type: analysis.query_type,
+                query_category: analysis.query_category,
                 analysis_status: "complete",
+                metadata: {
+                  completed_at: new Date().toISOString(),
+                  duration_ms: duration,
+                  attempt_count: attemptCount,
+                } as QueryMetadata,
               })
-              .eq("id", query.id);
+              .eq("id", queryRecord.id);
 
             analyzed++;
-          } catch (error) {
-            console.error(`Error analyzing query ${query.id}:`, error);
+            console.log(`  ✅ Query ${queryRecord.query_id}: ${queryRecord.query_text.substring(0, 50)}... (${duration}ms)`);
 
-            // Mark query as error
+          } catch (error) {
+            const duration = Date.now() - startTime;
+            const errorMessage = sanitizeErrorMessage(error);
+
+            console.error(`  ❌ Query ${queryRecord.query_id} failed after retries:`, errorMessage);
+
+            // Generate fallback result for critical fields
+            const fallback = generateFallbackResult(queryRecord);
+
+            // Update with fallback values and error status
             await supabase
               .from("queries")
-              .update({ analysis_status: "error" })
-              .eq("id", query.id);
+              .update({
+                brand_mentions: fallback.brand_mentions.join(", "),
+                source: fallback.source,
+                query_type: fallback.query_type,
+                query_category: fallback.query_category,
+                analysis_status: "error",
+                metadata: {
+                  error_message: errorMessage,
+                  failed_at: new Date().toISOString(),
+                  duration_ms: duration,
+                  attempt_count: DEFAULT_RETRY_CONFIG.maxRetries + 1,
+                } as QueryMetadata,
+              })
+              .eq("id", queryRecord.id);
 
             errors++;
           }
         })
       );
 
-      // Small delay between batches to avoid rate limits
+      // Log batch completion
+      console.log(`  Batch complete: ${analyzed} analyzed, ${errors} errors`);
+      console.log(`  Rate limiter:`, rateLimiter.getStatus());
+
+      // Small delay between batches (rate limiter handles most of this)
       if (i + batchSize < queries.length) {
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
 
-    // Check if all queries are complete
+    // Check if all queries for the project are complete
     const { data: remainingQueries } = await supabase
       .from("queries")
       .select("id")
       .eq("project_id", project_id)
       .in("analysis_status", ["pending", "analyzing"]);
 
+    // Update project status if all complete
     if (!remainingQueries || remainingQueries.length === 0) {
-      // Update project status to 'analysis_complete'
+      console.log(`\n🎉 All queries complete for project ${project_id}, updating project status`);
+
       await supabase
         .from("query_projects")
         .update({
@@ -143,14 +201,26 @@ serve(async (req) => {
           current_step: 3,
         })
         .eq("id", project_id);
+    } else {
+      console.log(`\n⏳ ${remainingQueries.length} queries still pending/analyzing`);
     }
+
+    const successRate = analyzed / (analyzed + errors) * 100;
+    const message = errors > 0
+      ? `Successfully analyzed ${analyzed} queries with ${errors} errors (${successRate.toFixed(1)}% success rate)`
+      : `Successfully analyzed ${analyzed} queries (100% success rate)`;
+
+    console.log(`\n✨ Analysis complete: ${message}`);
 
     return new Response(
       JSON.stringify({
         success: true,
         analyzed,
         errors,
-        message: `Successfully analyzed ${analyzed} queries (${errors} errors)`,
+        retried,
+        total: queries.length,
+        successRate: successRate.toFixed(1),
+        message,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -158,7 +228,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error in analyze-queries:", error);
+    console.error("❌ Error in analyze-queries:", error);
     return new Response(
       JSON.stringify({
         error: error.message,
@@ -171,79 +241,3 @@ serve(async (req) => {
     );
   }
 });
-
-async function analyzeSingleQuery(
-  query: any,
-  project: any,
-  apiKey: string
-): Promise<any> {
-  const prompt = `Analyze this AEO query and provide structured information:
-
-Query: "${query.query_text}"
-Query Type: ${query.query_type}
-Category: ${query.query_category}
-Target Audience: ${query.target_audience}
-
-Company: ${project.company_url || "Not specified"}
-Competitors: ${project.competitor_urls?.join(", ") || "Not specified"}
-
-Please analyze:
-1. Which brands would likely be mentioned in answers to this query? (List specific brand names)
-2. What sources (websites, platforms, forums) would typically answer this query?
-3. Confirm or correct the query type and category
-
-Output as JSON with this exact format:
-{
-  "brand_mentions": ["Brand1", "Brand2", "Brand3"],
-  "source": "Source name or platform (e.g., 'Reddit forums', 'Industry documentation', 'Review sites')",
-  "query_type": "Educational",
-  "query_category": "Industry monitoring"
-}
-
-IMPORTANT:
-- brand_mentions should be an array of specific brand/company names (not generic terms)
-- query_type must be exactly "Educational" or "Service-Aligned"
-- query_category must be one of the 10 valid categories
-- Return ONLY the JSON object, no additional text`;
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.3,
-          maxOutputTokens: 2048,
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  const text = data.candidates[0].content.parts[0].text;
-
-  try {
-    return JSON.parse(text);
-  } catch (parseError) {
-    console.error("Failed to parse LLM response:", text);
-    throw new Error("Failed to parse LLM response as JSON");
-  }
-}
