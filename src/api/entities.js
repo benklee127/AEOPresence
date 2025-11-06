@@ -1,13 +1,12 @@
-import { base44 } from './base44Client';
+// Direct Supabase entity exports
+import { createEntity } from '../lib/supabase-entities';
+import { auth } from '../lib/auth';
 
+// Create entity helpers for each table
+export const QueryProject = createEntity('query_projects');
+export const Query = createEntity('queries');
+export const Folder = createEntity('folders');
+export const User = createEntity('users', true); // Use service role for user operations
 
-export const QueryProject = base44.entities.QueryProject;
-
-export const Query = base44.entities.Query;
-
-export const Folder = base44.entities.Folder;
-
-
-
-// auth sdk:
-export const User = base44.auth;
+// Export auth helper
+export { auth };

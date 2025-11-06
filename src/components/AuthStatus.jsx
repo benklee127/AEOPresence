@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { auth } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LogIn, LogOut, User as UserIcon } from 'lucide-react';
@@ -10,12 +10,21 @@ export default function AuthStatus() {
 
   useEffect(() => {
     checkUser();
+
+    // Subscribe to auth changes
+    const { data: { subscription } } = auth.onAuthStateChange(() => {
+      checkUser();
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const checkUser = async () => {
     try {
-      const currentUser = await base44.auth.getCurrentUser();
-      setUser(currentUser);
+      const userData = await auth.getUserData();
+      setUser(userData);
     } catch (error) {
       console.error('Error checking user:', error);
       setUser(null);
@@ -27,12 +36,11 @@ export default function AuthStatus() {
   const handleLogin = async () => {
     try {
       setLoading(true);
-      await base44.auth.login('dev'); // Development login
-      await checkUser();
+      await auth.signInWithGoogle();
+      // OAuth redirect happens automatically, no need to refresh here
     } catch (error) {
       console.error('Login error:', error);
       alert('Login failed: ' + error.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -40,12 +48,13 @@ export default function AuthStatus() {
   const handleLogout = async () => {
     try {
       setLoading(true);
-      await base44.auth.logout();
+      await auth.signOut();
       setUser(null);
-      window.location.reload(); // Refresh to clear state
+      window.location.href = '/'; // Redirect to home
     } catch (error) {
       console.error('Logout error:', error);
       alert('Logout failed: ' + error.message);
+      setLoading(false);
     }
   };
 
@@ -62,7 +71,7 @@ export default function AuthStatus() {
     return (
       <Button onClick={handleLogin} variant="outline" size="sm">
         <LogIn className="w-4 h-4 mr-2" />
-        Sign In (Dev)
+        Sign In with Google
       </Button>
     );
   }
