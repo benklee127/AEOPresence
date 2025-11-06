@@ -72,7 +72,28 @@ export function createEntity(tableName, useServiceRole = false) {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          `[src/lib/supabase-entities.js] Failed to list records from table "${tableName}"\n\n` +
+          `📊 Query Details:\n` +
+          `   • Order by: ${orderBy}\n` +
+          `   • Limit: ${options.limit || 'none'}\n` +
+          `   • Using: ${useServiceRole ? 'Service Role (admin)' : 'Public Key (authenticated)'}\n\n` +
+          `❌ Supabase Error:\n` +
+          `   ${error.message}\n\n` +
+          `💡 Possible causes:\n` +
+          `   • Table "${tableName}" does not exist in database\n` +
+          `   • RLS policies deny read access (check Supabase dashboard)\n` +
+          `   • Field "${orderBy}" does not exist in table\n` +
+          `   • Network/connection issue to Supabase\n\n` +
+          `🔧 Troubleshooting:\n` +
+          `   1. Verify table exists: Dashboard → Table Editor → "${tableName}"\n` +
+          `   2. Check RLS policies: Dashboard → Authentication → Policies\n` +
+          `   3. Run migrations: See MIGRATION_GUIDE.md\n\n` +
+          `Error Code: ${error.code || 'unknown'}\n` +
+          `Hint: ${error.hint || 'No additional hint available'}`
+        );
+      }
       return data || [];
     },
 
@@ -88,7 +109,27 @@ export function createEntity(tableName, useServiceRole = false) {
         .eq('id', id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          `[src/lib/supabase-entities.js] Failed to get record from table "${tableName}"\n\n` +
+          `🔍 Query Details:\n` +
+          `   • Table: ${tableName}\n` +
+          `   • Record ID: ${id}\n` +
+          `   • Using: ${useServiceRole ? 'Service Role (admin)' : 'Public Key (authenticated)'}\n\n` +
+          `❌ Supabase Error:\n` +
+          `   ${error.message}\n\n` +
+          `💡 Possible causes:\n` +
+          `   • Table "${tableName}" does not exist\n` +
+          `   • RLS policies deny read access for this record\n` +
+          `   • Invalid UUID format for id: "${id}"\n` +
+          `   • Network/connection issue\n\n` +
+          `🔧 Troubleshooting:\n` +
+          `   1. Check table exists in Supabase Dashboard\n` +
+          `   2. Verify RLS policies allow reading this record\n` +
+          `   3. Confirm ID format is valid UUID\n\n` +
+          `Error Code: ${error.code || 'unknown'}`
+        );
+      }
       return data;
     },
 
@@ -104,7 +145,31 @@ export function createEntity(tableName, useServiceRole = false) {
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          `[src/lib/supabase-entities.js] Failed to create record in table "${tableName}"\n\n` +
+          `📝 Operation Details:\n` +
+          `   • Table: ${tableName}\n` +
+          `   • Data keys: ${Object.keys(data).join(', ')}\n` +
+          `   • Using: ${useServiceRole ? 'Service Role (admin)' : 'Public Key (authenticated)'}\n\n` +
+          `❌ Supabase Error:\n` +
+          `   ${error.message}\n\n` +
+          `💡 Possible causes:\n` +
+          `   • Table "${tableName}" does not exist\n` +
+          `   • RLS policies deny insert access\n` +
+          `   • Required fields are missing\n` +
+          `   • Field type mismatch (e.g., string instead of UUID)\n` +
+          `   • Foreign key constraint violation\n` +
+          `   • Unique constraint violation (duplicate value)\n\n` +
+          `🔧 Troubleshooting:\n` +
+          `   1. Check table schema matches data structure\n` +
+          `   2. Verify all required fields are provided\n` +
+          `   3. Check RLS policies allow insert for your user\n` +
+          `   4. Ensure UUIDs and foreign keys are valid\n\n` +
+          `Error Code: ${error.code || 'unknown'}\n` +
+          `Details: ${error.details || 'No additional details'}`
+        );
+      }
       return result;
     },
 
@@ -127,7 +192,32 @@ export function createEntity(tableName, useServiceRole = false) {
         .select()
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          `[src/lib/supabase-entities.js] Failed to update record in table "${tableName}"\n\n` +
+          `🔄 Operation Details:\n` +
+          `   • Table: ${tableName}\n` +
+          `   • Record ID: ${id}\n` +
+          `   • Fields to update: ${Object.keys(data).join(', ')}\n` +
+          `   • Using: ${useServiceRole ? 'Service Role (admin)' : 'Public Key (authenticated)'}\n\n` +
+          `❌ Supabase Error:\n` +
+          `   ${error.message}\n\n` +
+          `💡 Possible causes:\n` +
+          `   • Record with ID "${id}" does not exist\n` +
+          `   • RLS policies deny update access\n` +
+          `   • Field type mismatch in update data\n` +
+          `   • Foreign key constraint violation\n` +
+          `   • Unique constraint violation\n` +
+          `   • Invalid UUID format for id\n\n` +
+          `🔧 Troubleshooting:\n` +
+          `   1. Verify record exists with this ID\n` +
+          `   2. Check RLS policies allow update for your user\n` +
+          `   3. Ensure field types match table schema\n` +
+          `   4. Confirm ID is valid UUID format\n\n` +
+          `Error Code: ${error.code || 'unknown'}\n` +
+          `Details: ${error.details || 'No additional details'}`
+        );
+      }
       return result;
     },
 
@@ -142,7 +232,29 @@ export function createEntity(tableName, useServiceRole = false) {
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          `[src/lib/supabase-entities.js] Failed to delete record from table "${tableName}"\n\n` +
+          `🗑️  Operation Details:\n` +
+          `   • Table: ${tableName}\n` +
+          `   • Record ID: ${id}\n` +
+          `   • Using: ${useServiceRole ? 'Service Role (admin)' : 'Public Key (authenticated)'}\n\n` +
+          `❌ Supabase Error:\n` +
+          `   ${error.message}\n\n` +
+          `💡 Possible causes:\n` +
+          `   • Record with ID "${id}" does not exist\n` +
+          `   • RLS policies deny delete access\n` +
+          `   • Foreign key constraint prevents deletion (record referenced elsewhere)\n` +
+          `   • Invalid UUID format for id\n\n` +
+          `🔧 Troubleshooting:\n` +
+          `   1. Check record exists with this ID\n` +
+          `   2. Verify RLS policies allow delete for your user\n` +
+          `   3. Check for dependent records in other tables\n` +
+          `   4. Consider cascade delete or remove dependencies first\n\n` +
+          `Error Code: ${error.code || 'unknown'}\n` +
+          `Details: ${error.details || 'No additional details'}`
+        );
+      }
     },
 
     /**
@@ -174,10 +286,86 @@ export function createEntity(tableName, useServiceRole = false) {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      if (error) {
+        const conditionsSummary = Object.entries(conditions)
+          .map(([k, v]) => `${k}=${Array.isArray(v) ? `[${v.join(',')}]` : v}`)
+          .join(', ');
+
+        throw new Error(
+          `[src/lib/supabase-entities.js] Failed to filter records from table "${tableName}"\n\n` +
+          `🔍 Query Details:\n` +
+          `   • Table: ${tableName}\n` +
+          `   • Conditions: ${conditionsSummary || '(none)'}\n` +
+          `   • Order by: ${orderBy}\n` +
+          `   • Using: ${useServiceRole ? 'Service Role (admin)' : 'Public Key (authenticated)'}\n\n` +
+          `❌ Supabase Error:\n` +
+          `   ${error.message}\n\n` +
+          `💡 Possible causes:\n` +
+          `   • Table "${tableName}" does not exist\n` +
+          `   • RLS policies deny read access\n` +
+          `   • Invalid field name in conditions or orderBy\n` +
+          `   • Field type mismatch in filter values\n` +
+          `   • Network/connection issue\n\n` +
+          `🔧 Troubleshooting:\n` +
+          `   1. Verify all field names exist in table schema\n` +
+          `   2. Check RLS policies allow filtered queries\n` +
+          `   3. Ensure filter values match field types\n` +
+          `   4. Run: npm run migrations (if table is missing)\n\n` +
+          `Error Code: ${error.code || 'unknown'}\n` +
+          `Hint: ${error.hint || 'No additional hint available'}`
+        );
+      }
       return data || [];
     },
   };
+}
+
+/**
+ * Helper to handle Edge Function errors with descriptive messages
+ */
+async function callEdgeFunction(functionName, params, additionalInfo = {}) {
+  const response = await fetch(
+    `${supabaseUrl}/functions/v1/${functionName}`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${supabaseServiceKey}`,
+      },
+      body: JSON.stringify(params),
+    }
+  );
+
+  if (!response.ok) {
+    let errorMessage = 'Unknown error';
+    try {
+      const error = await response.json();
+      errorMessage = error.error || error.message || `Failed to call ${functionName}`;
+    } catch {
+      errorMessage = await response.text();
+    }
+
+    throw new Error(
+      `[src/lib/supabase-entities.js] Edge Function "${functionName}" failed\n\n` +
+      `📡 Request Details:\n` +
+      `   • Function: ${functionName}\n` +
+      `   • Status: ${response.status} ${response.statusText}\n` +
+      Object.entries(additionalInfo).map(([k, v]) => `   • ${k}: ${v}`).join('\n') +
+      `\n\n❌ Error:\n   ${errorMessage}\n\n` +
+      `💡 Common causes:\n` +
+      `   • Edge function not deployed (run: supabase functions deploy ${functionName})\n` +
+      `   • Missing environment variables (VITE_GEMINI_API_KEY, etc.)\n` +
+      `   • Service role key invalid\n` +
+      `   • Function timeout or resource limit\n` +
+      `   • Invalid request parameters\n\n` +
+      `🔧 Troubleshooting:\n` +
+      `   1. Check function logs: Dashboard → Edge Functions → ${functionName}\n` +
+      `   2. Verify all environment variables in .env.local\n` +
+      `   3. See BACKEND_FUNCTIONS.md for deployment guide`
+    );
+  }
+
+  return response.json();
 }
 
 /**
@@ -186,107 +374,33 @@ export function createEntity(tableName, useServiceRole = false) {
  */
 export const functions = {
   async generateQueries(params) {
-    const response = await fetch(
-      `${supabaseUrl}/functions/v1/generate-queries`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify(params),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to generate queries');
-    }
-
-    return response.json();
+    return callEdgeFunction('generate-queries', params, {
+      'Project ID': params.projectId || '(not provided)',
+    });
   },
 
   async analyzeQueries(params) {
-    const response = await fetch(
-      `${supabaseUrl}/functions/v1/analyze-queries`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify(params),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to analyze queries');
-    }
-
-    return response.json();
+    return callEdgeFunction('analyze-queries', params, {
+      'Project ID': params.projectId || '(not provided)',
+    });
   },
 
   async exportStep3Report(params) {
-    const response = await fetch(
-      `${supabaseUrl}/functions/v1/export-step3-report`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify(params),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to export report');
-    }
-
-    return response.json();
+    return callEdgeFunction('export-step3-report', params, {
+      'Project ID': params.projectId || '(not provided)',
+      'Format': params.format || 'csv',
+    });
   },
 
   async resetStuckQueries(params) {
-    const response = await fetch(
-      `${supabaseUrl}/functions/v1/reset-stuck-queries`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify(params),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to reset stuck queries');
-    }
-
-    return response.json();
+    return callEdgeFunction('reset-stuck-queries', params, {
+      'Project ID': params.projectId || '(not provided)',
+    });
   },
 
   async diagnoseStuckQueries(params) {
-    const response = await fetch(
-      `${supabaseUrl}/functions/v1/diagnose-stuck-queries`,
-      {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${supabaseServiceKey}`,
-        },
-        body: JSON.stringify(params),
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to diagnose stuck queries');
-    }
-
-    return response.json();
+    return callEdgeFunction('diagnose-stuck-queries', params, {
+      'Project ID': params.projectId || '(not provided)',
+    });
   },
 };
