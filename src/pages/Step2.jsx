@@ -296,8 +296,8 @@ Return JSON array with exactly ${remaining} queries using this structure:
     try {
       // Call the backend function to start analysis
       const response = await analyzeQueries({ projectId });
-      
-      console.log('Analysis response:', response.data);
+
+      console.log('Analysis response:', response);
       queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
       
@@ -352,10 +352,10 @@ Return JSON array with exactly ${remaining} queries using this structure:
     try {
       const response = await diagnoseStuckQueries({ projectId });
       console.log('=== DIAGNOSTIC RESULTS ===');
-      console.log(JSON.stringify(response.data, null, 2));
-      
+      console.log(JSON.stringify(response, null, 2));
+
       // Also show a summary in an alert
-      const summary = response.data.summary;
+      const summary = response.summary;
       alert(`DIAGNOSTIC SUMMARY:
 Total Queries: ${summary.total}
 Completed: ${summary.statusCounts.complete || 0}
@@ -381,11 +381,11 @@ Check console (F12) for full details.`);
     
     try {
       const response = await resetStuckQueries({ projectId });
-      alert(response.data.message);
+      alert(response.message);
       queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
-      
+
       // Auto-restart analysis after reset
-      if (response.data.stuck > 0) {
+      if (response.stuck > 0) {
         setTimeout(() => handleStartAnalysis(), 1000);
       }
     } catch (error) {
