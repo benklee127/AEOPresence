@@ -40,7 +40,28 @@ export const auth = {
       },
     });
 
-    if (error) throw error;
+    if (error) {
+      throw new Error(
+        `[src/lib/auth.js] Google OAuth sign-in failed\n\n` +
+        `❌ Error:\n   ${error.message}\n\n` +
+        `💡 Possible causes:\n` +
+        `   • Google OAuth provider not enabled in Supabase\n` +
+        `   • Google Client ID/Secret not configured\n` +
+        `   • Redirect URL not authorized in Google Console\n` +
+        `   • Pop-up blocked by browser\n` +
+        `   • User denied permissions\n\n` +
+        `🔧 Setup Google OAuth:\n` +
+        `   1. Go to: https://console.cloud.google.com\n` +
+        `   2. Create OAuth Client ID (Web application)\n` +
+        `   3. Add authorized redirect URIs:\n` +
+        `      • ${window.location.origin}/auth/callback\n` +
+        `      • https://YOUR_PROJECT.supabase.co/auth/v1/callback\n` +
+        `   4. Enable Google provider in Supabase Dashboard\n` +
+        `   5. Add Client ID and Secret to Supabase\n\n` +
+        `📖 See BASE44_REMOVAL_PLAN.md for detailed Google OAuth setup\n` +
+        `Error Code: ${error.code || 'unknown'}`
+      );
+    }
     return data;
   },
 
@@ -50,7 +71,15 @@ export const auth = {
    */
   async signOut() {
     const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    if (error) {
+      throw new Error(
+        `[src/lib/auth.js] Sign-out failed\n\n` +
+        `❌ Error:\n   ${error.message}\n\n` +
+        `💡 This is unusual - sign-out rarely fails\n` +
+        `🔧 Try: Clear browser cookies and local storage\n` +
+        `Error Code: ${error.code || 'unknown'}`
+      );
+    }
   },
 
   /**
@@ -63,7 +92,16 @@ export const auth = {
       if (error.message?.includes('Auth session missing')) {
         return null;
       }
-      throw error;
+      throw new Error(
+        `[src/lib/auth.js] Failed to get authenticated user\n\n` +
+        `❌ Error:\n   ${error.message}\n\n` +
+        `💡 Possible causes:\n` +
+        `   • Session expired or invalid\n` +
+        `   • Supabase connection issue\n` +
+        `   • Auth token corrupted in local storage\n\n` +
+        `🔧 Try: Sign out and sign in again\n` +
+        `Error Code: ${error.code || 'unknown'}`
+      );
     }
     return user;
   },
@@ -74,7 +112,18 @@ export const auth = {
    */
   async getSession() {
     const { data: { session }, error } = await supabase.auth.getSession();
-    if (error) throw error;
+    if (error) {
+      throw new Error(
+        `[src/lib/auth.js] Failed to get session\n\n` +
+        `❌ Error:\n   ${error.message}\n\n` +
+        `💡 Possible causes:\n` +
+        `   • No active session\n` +
+        `   • Session expired\n` +
+        `   • Local storage access denied\n\n` +
+        `🔧 Try: Sign in again\n` +
+        `Error Code: ${error.code || 'unknown'}`
+      );
+    }
     return session;
   },
 
@@ -107,7 +156,22 @@ export const auth = {
         .eq('id', user.id)
         .maybeSingle();
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          `[src/lib/auth.js] Failed to fetch user data from database\n\n` +
+          `❌ Error:\n   ${error.message}\n\n` +
+          `💡 Possible causes:\n` +
+          `   • Table "users" does not exist\n` +
+          `   • Database migrations not run\n` +
+          `   • Service role key invalid\n` +
+          `   • Network connection issue\n\n` +
+          `🔧 Troubleshooting:\n` +
+          `   1. Run migrations: See MIGRATION_GUIDE.md\n` +
+          `   2. Verify VITE_SUPABASE_SERVICE_ROLE_KEY in .env.local\n` +
+          `   3. Check table exists in Supabase Dashboard\n` +
+          `Error Code: ${error.code || 'unknown'}`
+        );
+      }
 
       // If user doesn't exist in database, create them
       if (!data) {
@@ -125,7 +189,19 @@ export const auth = {
           .select()
           .single();
 
-        if (createError) throw createError;
+        if (createError) {
+          throw new Error(
+            `[src/lib/auth.js] Failed to create user record in database\n\n` +
+            `❌ Error:\n   ${createError.message}\n\n` +
+            `💡 Possible causes:\n` +
+            `   • User ID already exists (UUID conflict)\n` +
+            `   • RLS policies deny insert\n` +
+            `   • Required fields missing\n` +
+            `   • Table schema mismatch\n\n` +
+            `🔧 Check: Table "users" schema and RLS policies\n` +
+            `Error Code: ${createError.code || 'unknown'}`
+          );
+        }
         return createdUser;
       }
 
@@ -145,7 +221,13 @@ export const auth = {
    */
   async updateUserData(userData) {
     const user = await this.getUser();
-    if (!user) throw new Error('Not authenticated');
+    if (!user) {
+      throw new Error(
+        `[src/lib/auth.js] Cannot update user data - not authenticated\n\n` +
+        `🔒 You must be signed in to update user data\n` +
+        `🔧 Sign in first using: auth.signInWithGoogle()`
+      );
+    }
 
     const { data, error } = await supabaseAdmin
       .from('users')
@@ -157,7 +239,22 @@ export const auth = {
       .select()
       .maybeSingle();
 
-    if (error) throw error;
+    if (error) {
+      throw new Error(
+        `[src/lib/auth.js] Failed to update user data\n\n` +
+        `❌ Error:\n   ${error.message}\n\n` +
+        `📊 Update Details:\n` +
+        `   • User ID: ${user.id}\n` +
+        `   • Fields: ${Object.keys(userData).join(', ')}\n\n` +
+        `💡 Possible causes:\n` +
+        `   • RLS policies deny update\n` +
+        `   • Field type mismatch\n` +
+        `   • Invalid field names\n` +
+        `   • User record doesn't exist in database\n\n` +
+        `🔧 Check: Table "users" schema and RLS policies\n` +
+        `Error Code: ${error.code || 'unknown'}`
+      );
+    }
     return data;
   },
 
