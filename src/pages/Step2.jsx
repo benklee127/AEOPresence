@@ -295,7 +295,7 @@ Return JSON array with exactly ${remaining} queries using this structure:
     
     try {
       // Call the backend function to start analysis
-      const response = await analyzeQueries({ projectId });
+      const response = await analyzeQueries({ project_id: projectId });
 
       console.log('Analysis response:', response);
       queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
@@ -350,7 +350,7 @@ Return JSON array with exactly ${remaining} queries using this structure:
   const handleDiagnose = async () => {
     setIsDiagnosing(true);
     try {
-      const response = await diagnoseStuckQueries({ projectId });
+      const response = await diagnoseStuckQueries({ project_id: projectId });
       console.log('=== DIAGNOSTIC RESULTS ===');
       console.log(JSON.stringify(response, null, 2));
 
@@ -380,7 +380,7 @@ Check console (F12) for full details.`);
     }
     
     try {
-      const response = await resetStuckQueries({ projectId });
+      const response = await resetStuckQueries({ project_id: projectId });
       alert(response.message);
       queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
 
@@ -473,7 +473,7 @@ Check console (F12) for full details.`);
       setTimeout(async () => {
         try {
           console.log('[Step2] 📞 Calling analyzeQueries for next batch...');
-          await analyzeQueries({ projectId });
+          await analyzeQueries({ project_id: projectId });
           queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
         } catch (error) {
           console.error('[Step2] ❌ Error auto-starting batch:', error);
