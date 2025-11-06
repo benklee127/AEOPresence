@@ -27,6 +27,20 @@ const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
 });
 
 /**
+ * Map field names from Base44 style to Supabase style
+ * Handles legacy field naming (created_date -> created_at)
+ * @param {string} fieldName - Field name to map
+ * @returns {string} Mapped field name
+ */
+function mapFieldName(fieldName) {
+  const fieldMappings = {
+    created_date: 'created_at',
+    updated_date: 'updated_at',
+  };
+  return fieldMappings[fieldName] || fieldName;
+}
+
+/**
  * Create an entity helper for database operations
  * @param {string} tableName - Name of the database table
  * @param {boolean} useServiceRole - Whether to use service role for operations
@@ -46,9 +60,11 @@ export function createEntity(tableName, useServiceRole = false) {
       let query = client.from(tableName).select('*');
 
       if (orderBy.startsWith('-')) {
-        query = query.order(orderBy.substring(1), { ascending: false });
+        const field = mapFieldName(orderBy.substring(1));
+        query = query.order(field, { ascending: false });
       } else {
-        query = query.order(orderBy);
+        const field = mapFieldName(orderBy);
+        query = query.order(field);
       }
 
       if (options.limit) {
@@ -138,18 +154,23 @@ export function createEntity(tableName, useServiceRole = false) {
     async filter(conditions, orderBy = 'created_at') {
       let query = client.from(tableName).select('*');
 
+      // Map condition field names
       Object.entries(conditions).forEach(([key, value]) => {
+        const mappedKey = mapFieldName(key);
         if (Array.isArray(value)) {
-          query = query.in(key, value);
+          query = query.in(mappedKey, value);
         } else {
-          query = query.eq(key, value);
+          query = query.eq(mappedKey, value);
         }
       });
 
+      // Map orderBy field name
       if (orderBy.startsWith('-')) {
-        query = query.order(orderBy.substring(1), { ascending: false });
+        const field = mapFieldName(orderBy.substring(1));
+        query = query.order(field, { ascending: false });
       } else {
-        query = query.order(orderBy);
+        const field = mapFieldName(orderBy);
+        query = query.order(field);
       }
 
       const { data, error } = await query;
