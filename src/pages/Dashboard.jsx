@@ -302,6 +302,20 @@ export default function Dashboard() {
     });
   };
 
+  const createProjectMutation = useMutation({
+    mutationFn: async (data) => {
+      return base44.entities.QueryProject.create(data);
+    },
+    onSuccess: (project) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      navigate(createPageUrl(`Step1?projectId=${project.id}`));
+    },
+    onError: (error) => {
+      console.error('Error creating project:', error);
+      alert('Failed to create project. Please try again.');
+    }
+  });
+
   // Filter projects based on selected folder
   const filteredProjects = selectedFolderId 
     ? projects.filter(p => p.folder_id === selectedFolderId)
@@ -316,14 +330,13 @@ export default function Dashboard() {
     totalQueries: projects.reduce((sum, p) => sum + (p.total_queries || 0), 0),
   };
 
-  const handleCreateProject = async () => {
-    const project = await base44.entities.QueryProject.create({
+  const handleCreateProject = () => {
+    createProjectMutation.mutate({
       name: `New Project ${format(new Date(), 'MMM d, yyyy')}`,
       status: 'draft',
       current_step: 1,
       folder_id: selectedFolderId && selectedFolderId !== 'no-folder' ? selectedFolderId : null
     });
-    navigate(createPageUrl(`Step1?projectId=${project.id}`));
   };
 
   return (
