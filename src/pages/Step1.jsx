@@ -68,11 +68,8 @@ export default function Step1() {
       id: projectId,
       data: formData,
     });
-
-    // Navigate to Step 2 after successfully saving configuration
-    setTimeout(() => {
-      navigate(createPageUrl(`Step2?projectId=${projectId}`));
-    }, 1500); // Give time for the success message to be seen
+    // Query generation buttons will appear automatically after save
+    // since the project data will be refreshed with the audience information
   };
 
   const handleGenerateQueries = async (count = 200) => {
