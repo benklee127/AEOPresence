@@ -1,6 +1,6 @@
 
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { QueryProject, Query, Folder } from "@/api/entities";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,16 +54,16 @@ export default function Dashboard() {
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ['projects'],
-    queryFn: () => base44.entities.QueryProject.list('-created_date'),
+    queryFn: () => QueryProject.list('-created_date'),
   });
 
   const { data: folders = [] } = useQuery({
     queryKey: ['folders'],
-    queryFn: () => base44.entities.Folder.list('-created_date'),
+    queryFn: () => Folder.list('-created_date'),
   });
 
   const createFolderMutation = useMutation({
-    mutationFn: (data) => base44.entities.Folder.create(data),
+    mutationFn: (data) => Folder.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       setShowFolderDialog(false);
@@ -72,7 +72,7 @@ export default function Dashboard() {
   });
 
   const updateFolderMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Folder.update(id, data),
+    mutationFn: ({ id, data }) => Folder.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       setShowFolderDialog(false);
@@ -87,11 +87,11 @@ export default function Dashboard() {
       const projectsInFolder = projects.filter(p => p.folder_id === folderId);
       await Promise.all(
         projectsInFolder.map(p => 
-          base44.entities.QueryProject.update(p.id, { folder_id: null })
+          QueryProject.update(p.id, { folder_id: null })
         )
       );
       // Then delete the folder
-      await base44.entities.Folder.delete(folderId);
+      await Folder.delete(folderId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['folders'] });
@@ -100,7 +100,7 @@ export default function Dashboard() {
   });
 
   const updateProjectMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.QueryProject.update(id, data),
+    mutationFn: ({ id, data }) => QueryProject.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
@@ -109,7 +109,7 @@ export default function Dashboard() {
   const rerunQueriesMutation = useMutation({
     mutationFn: async (originalProject) => {
       // Create new project with same configuration
-      const newProject = await base44.entities.QueryProject.create({
+      const newProject = await QueryProject.create({
         name: `${originalProject.name} (Re-run ${format(new Date(), 'MMM d, yyyy')})`,
         folder_id: originalProject.folder_id,
         company_url: originalProject.company_url,
@@ -127,7 +127,7 @@ export default function Dashboard() {
       });
 
       // Copy all queries from original project
-      const originalQueries = await base44.entities.Query.filter({ 
+      const originalQueries = await Query.filter({ 
         project_id: originalProject.id 
       });
 
@@ -143,7 +143,7 @@ export default function Dashboard() {
           analysis_status: 'pending'
         }));
 
-        await base44.entities.Query.bulkCreate(newQueries);
+        await Query.bulkCreate(newQueries);
       }
 
       return newProject;
@@ -156,7 +156,7 @@ export default function Dashboard() {
 
   const deleteProjectMutation = useMutation({
     mutationFn: async (projectId) => {
-      const queries = await base44.entities.Query.filter({ project_id: projectId });
+      const queries = await Query.filter({ project_id: projectId });
       
       const batchSize = 5;
       const batchDelay = 2000;
@@ -170,7 +170,7 @@ export default function Dashboard() {
           
           while (retries <= maxRetries) {
             try {
-              await base44.entities.Query.delete(q.id);
+              await Query.delete(q.id);
               return;
             } catch (error) {
               if (error.message?.includes('Rate limit') && retries < maxRetries) {
@@ -199,7 +199,7 @@ export default function Dashboard() {
       
       while (retries <= maxRetries) {
         try {
-          await base44.entities.QueryProject.delete(projectId);
+          await QueryProject.delete(projectId);
           return;
         } catch (error) {
           if (error.message?.includes('Rate limit') && retries < maxRetries) {
@@ -304,7 +304,7 @@ export default function Dashboard() {
 
   const createProjectMutation = useMutation({
     mutationFn: async (data) => {
-      return base44.entities.QueryProject.create(data);
+      return QueryProject.create(data);
     },
     onSuccess: (project) => {
       queryClient.invalidateQueries({ queryKey: ['projects'] });

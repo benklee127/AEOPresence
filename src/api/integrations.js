@@ -1,28 +1,37 @@
-import { base44 } from './base44Client';
 import { InvokeLLM as InvokeLLMProvider } from './llmProvider';
+import { UploadFile as UploadFileIntegration, UploadPrivateFile as UploadPrivateFileIntegration, CreateFileSignedUrl as CreateFileSignedUrlIntegration } from '../lib/supabase-integrations';
 
-
-
-
-export const Core = base44.integrations.Core;
-
-// Use LLM provider abstraction for InvokeLLM (supports Base44 and Gemini)
+// LLM provider abstraction for InvokeLLM (Gemini API)
 export const InvokeLLM = InvokeLLMProvider;
 
-export const SendEmail = base44.integrations.Core.SendEmail;
+// Supabase Storage integrations
+export const UploadFile = UploadFileIntegration;
+export const UploadPrivateFile = UploadPrivateFileIntegration;
+export const CreateFileSignedUrl = CreateFileSignedUrlIntegration;
 
-export const UploadFile = base44.integrations.Core.UploadFile;
+// Placeholder integrations (not yet implemented - add when needed)
+export const SendEmail = async (params) => {
+  console.warn('SendEmail integration not yet implemented for Supabase');
+  throw new Error('SendEmail integration not yet implemented. Please add to src/lib/supabase-integrations.js');
+};
 
-export const GenerateImage = base44.integrations.Core.GenerateImage;
+export const GenerateImage = async (params) => {
+  console.warn('GenerateImage integration not yet implemented for Supabase');
+  throw new Error('GenerateImage integration not yet implemented. Please add to src/lib/supabase-integrations.js');
+};
 
-export const ExtractDataFromUploadedFile = base44.integrations.Core.ExtractDataFromUploadedFile;
+export const ExtractDataFromUploadedFile = async (params) => {
+  console.warn('ExtractDataFromUploadedFile integration not yet implemented for Supabase');
+  throw new Error('ExtractDataFromUploadedFile integration not yet implemented. Please add to src/lib/supabase-integrations.js');
+};
 
-export const CreateFileSignedUrl = base44.integrations.Core.CreateFileSignedUrl;
-
-export const UploadPrivateFile = base44.integrations.Core.UploadPrivateFile;
-
-
-
-
-
-
+// Export Core object for backward compatibility (if any code uses Core.UploadFile, etc.)
+export const Core = {
+  UploadFile: UploadFileIntegration,
+  UploadPrivateFile: UploadPrivateFileIntegration,
+  CreateFileSignedUrl: CreateFileSignedUrlIntegration,
+  SendEmail,
+  GenerateImage,
+  ExtractDataFromUploadedFile,
+  InvokeLLM: InvokeLLMProvider,
+};

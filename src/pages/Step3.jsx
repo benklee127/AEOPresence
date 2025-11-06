@@ -1,6 +1,6 @@
 
 import React, { useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { QueryProject, Query } from "@/api/entities";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -32,13 +32,13 @@ export default function Step3() {
 
   const { data: project, isLoading: projectLoading } = useQuery({
     queryKey: ['project', projectId],
-    queryFn: () => base44.entities.QueryProject.get(projectId),
+    queryFn: () => QueryProject.get(projectId),
     enabled: !!projectId,
   });
 
   const { data: queries = [] } = useQuery({
     queryKey: ['queries', projectId],
-    queryFn: () => base44.entities.Query.filter({ project_id: projectId }),
+    queryFn: () => Query.filter({ project_id: projectId }),
     enabled: !!projectId,
   });
 

@@ -317,6 +317,61 @@ export function createEntity(tableName, useServiceRole = false) {
       }
       return data || [];
     },
+
+    /**
+     * Bulk create multiple records at once
+     * @param {Array<Object>} dataArray - Array of records to create
+     * @returns {Promise<Array>} Array of created records
+     */
+    async bulkCreate(dataArray) {
+      if (!Array.isArray(dataArray) || dataArray.length === 0) {
+        throw new Error(
+          `[src/lib/supabase-entities.js] bulkCreate requires a non-empty array\n\n` +
+          `📝 Operation Details:\n` +
+          `   • Table: ${tableName}\n` +
+          `   • Provided data: ${typeof dataArray}\n\n` +
+          `💡 Expected: Array of objects with record data\n` +
+          `   Example: [{ name: 'Item 1' }, { name: 'Item 2' }]`
+        );
+      }
+
+      const { data: result, error } = await client
+        .from(tableName)
+        .insert(dataArray)
+        .select();
+
+      if (error) {
+        throw new Error(
+          `[src/lib/supabase-entities.js] Failed to bulk create records in table "${tableName}"\n\n` +
+          `📝 Operation Details:\n` +
+          `   • Table: ${tableName}\n` +
+          `   • Records to insert: ${dataArray.length}\n` +
+          `   • Sample keys: ${Object.keys(dataArray[0] || {}).join(', ')}\n` +
+          `   • Using: ${useServiceRole ? 'Service Role (admin)' : 'Public Key (authenticated)'}\n\n` +
+          `❌ Supabase Error:\n` +
+          `   ${error.message}\n\n` +
+          `💡 Possible causes:\n` +
+          `   • Table "${tableName}" does not exist\n` +
+          `   • RLS policies deny insert access\n` +
+          `   • Required fields are missing in one or more records\n` +
+          `   • Field type mismatch (e.g., string instead of UUID)\n` +
+          `   • Foreign key constraint violation\n` +
+          `   • Unique constraint violation (duplicate value)\n` +
+          `   • Payload too large (consider batching)\n\n` +
+          `🔧 Troubleshooting:\n` +
+          `   1. Check table schema matches data structure\n` +
+          `   2. Verify all required fields are provided in each record\n` +
+          `   3. Check RLS policies allow insert for your user\n` +
+          `   4. Ensure UUIDs and foreign keys are valid\n` +
+          `   5. For large datasets (>1000 records), batch the inserts\n\n` +
+          `Error Code: ${error.code || 'unknown'}\n` +
+          `Details: ${error.details || 'No additional details'}\n` +
+          `Hint: ${error.hint || 'No additional hint available'}`
+        );
+      }
+
+      return result || [];
+    },
   };
 }
 

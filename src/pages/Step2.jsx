@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
-import { base44 } from "@/api/base44Client";
+import { QueryProject, Query } from "@/api/entities";
+import { analyzeQueries, diagnoseStuckQueries, resetStuckQueries } from "@/api/functions";
 import { InvokeLLM } from "@/api/integrations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -52,26 +53,26 @@ export default function Step2() {
 
   const { data: project, isLoading: projectLoading } = useQuery({
     queryKey: ['project', projectId],
-    queryFn: () => base44.entities.QueryProject.get(projectId),
+    queryFn: () => QueryProject.get(projectId),
     enabled: !!projectId,
   });
 
   const { data: queries = [] } = useQuery({
     queryKey: ['queries', projectId],
-    queryFn: () => base44.entities.Query.filter({ project_id: projectId }),
+    queryFn: () => Query.filter({ project_id: projectId }),
     enabled: !!projectId,
     refetchInterval: isAnalyzing || hasStartedAnalysis ? 3000 : false, // Poll while analyzing or when analysis has started
   });
 
   const updateQueryMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.Query.update(id, data),
+    mutationFn: ({ id, data }) => Query.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
     },
   });
 
   const updateProjectMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.QueryProject.update(id, data),
+    mutationFn: ({ id, data }) => QueryProject.update(id, data),
   });
 
   const handleGenerateFullQueries = async () => {
@@ -243,7 +244,7 @@ Return JSON array with exactly ${remaining} queries using this structure:
       setGenerationStatus('Saving queries to database...');
       setGenerationProgress(85);
 
-      await base44.entities.Query.bulkCreate(
+      await Query.bulkCreate(
         generatedQueries.map(q => ({
           project_id: projectId,
           query_id: q.query_id, // Use the re-assigned sequential query_id
@@ -294,7 +295,7 @@ Return JSON array with exactly ${remaining} queries using this structure:
     
     try {
       // Call the backend function to start analysis
-      const response = await base44.functions.invoke('analyzeQueries', { projectId });
+      const response = await analyzeQueries({ projectId });
       
       console.log('Analysis response:', response.data);
       queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
@@ -349,7 +350,7 @@ Return JSON array with exactly ${remaining} queries using this structure:
   const handleDiagnose = async () => {
     setIsDiagnosing(true);
     try {
-      const response = await base44.functions.invoke('diagnoseStuckQueries', { projectId });
+      const response = await diagnoseStuckQueries({ projectId });
       console.log('=== DIAGNOSTIC RESULTS ===');
       console.log(JSON.stringify(response.data, null, 2));
       
@@ -379,7 +380,7 @@ Check console (F12) for full details.`);
     }
     
     try {
-      const response = await base44.functions.invoke('resetStuckQueries', { projectId });
+      const response = await resetStuckQueries({ projectId });
       alert(response.data.message);
       queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
       
@@ -472,7 +473,7 @@ Check console (F12) for full details.`);
       setTimeout(async () => {
         try {
           console.log('[Step2] 📞 Calling analyzeQueries for next batch...');
-          await base44.functions.invoke('analyzeQueries', { projectId });
+          await analyzeQueries({ projectId });
           queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
         } catch (error) {
           console.error('[Step2] ❌ Error auto-starting batch:', error);

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { base44 } from "@/api/base44Client";
+import { UploadFile } from "@/api/integrations";
 import { InvokeLLM } from "@/api/integrations";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -91,8 +91,8 @@ export default function OnboardingForm({ project, onComplete }) {
 
     setIsUploadingLogo(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setFormData({ ...formData, company_logo_url: file_url });
+      const { url } = await UploadFile({ file });
+      setFormData({ ...formData, company_logo_url: url });
     } catch (error) {
       console.error('Error uploading logo:', error);
       alert('Failed to upload logo. Please try again.');
