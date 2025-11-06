@@ -67,4 +67,19 @@ if (!supabaseAnonKey || supabaseAnonKey === 'your_supabase_anon_key' || supabase
   )
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Log successful initialization (helps with debugging)
+console.log('✅ Supabase client initialized successfully');
+console.log(`   URL: ${supabaseUrl}`);
+console.log(`   Key: ${supabaseAnonKey.substring(0, 20)}... (${supabaseAnonKey.length} chars)`);
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+  },
+  global: {
+    headers: {
+      'apikey': supabaseAnonKey,
+    },
+  },
+})
