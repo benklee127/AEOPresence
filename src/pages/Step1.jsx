@@ -1,6 +1,7 @@
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { base44 } from "@/api/base44Client";
+import { InvokeLLM } from "@/api/integrations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,26 +20,13 @@ export default function Step1() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStatus, setGenerationStatus] = useState('');
-  const [showSuccessBanner, setShowSuccessBanner] = useState(false); // New state for success banner
-
-  // Refs to store interval/timeout IDs for cleanup
-  const pollIntervalRef = useRef(null);
-  const timeoutCleanupRef = useRef(null);
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false);
 
   // Redirect to dashboard if no projectId
   useEffect(() => {
     if (!projectId) {
       navigate(createPageUrl("Dashboard"));
     }
-    // Cleanup polling intervals/timeouts if component unmounts or projectId changes
-    return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
-      if (timeoutCleanupRef.current) {
-        clearTimeout(timeoutCleanupRef.current);
-      }
-    };
   }, [projectId, navigate]);
 
   const { data: project, isLoading: projectLoading } = useQuery({
@@ -75,94 +63,216 @@ export default function Step1() {
   const handleGenerateQueries = async (count = 200) => {
     if (!projectId || !project) return;
 
-    // Clear any previous intervals/timeouts before starting a new generation
-    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    if (timeoutCleanupRef.current) clearTimeout(timeoutCleanupRef.current);
-
     setIsGenerating(true);
     setGenerationProgress(0);
     setGenerationStatus('Starting generation...');
-    setShowSuccessBanner(false); // Reset banner state for new generation
+    setShowSuccessBanner(false);
 
     try {
-      setGenerationProgress(10);
-      setGenerationStatus(`Starting background generation of ${count} queries...`);
+      const audiences = Array.isArray(project.audience) ? project.audience.join(', ') : project.audience;
+      const formats = Array.isArray(project.query_format) ? project.query_format : [project.query_format];
 
-      // Call backend function to generate queries
-      await base44.functions.invoke('generateQueries', {
-        projectId,
-        count
+      const categories = [
+        "Industry monitoring",
+        "Competitor benchmarking",
+        "Operational training",
+        "Foundational understanding",
+        "Real-world learning examples",
+        "Educational — people-focused",
+        "Trend explanation",
+        "Pain-point focused — commercial intent",
+        "Product or vendor-related — lead intent",
+        "Decision-stage — ready to buy or engage"
+      ];
+
+      const queriesPerCategory = Math.floor(count / categories.length);
+
+      let formatInstruction = '';
+      if (formats.length === 2) {
+        formatInstruction = 'Mix of both Natural-language questions and Keyword phrases (distribute evenly)';
+      } else if (formats.includes('Natural-language questions')) {
+        formatInstruction = 'Natural-language questions only';
+      } else if (formats.includes('Keyword phrases')) {
+        formatInstruction = 'Keyword phrases only';
+      } else {
+        formatInstruction = 'Natural-language questions';
+      }
+
+      setGenerationStatus(`Generating ${count} queries...`);
+      setGenerationProgress(10);
+
+      const prompt = `Generate EXACTLY ${count} unique AEO queries for the following criteria:
+
+Audience: ${audiences}
+Themes/Focus Areas: ${project.themes}
+Query Mix: ${project.query_mix_type}${project.query_mix_type === 'Mixed' ? ` (${project.educational_ratio}% Educational, ${project.service_ratio}% Service-Aligned)` : ''}
+Query Format: ${formatInstruction}
+
+CRITICAL REQUIREMENTS:
+1. Generate EXACTLY ${count} queries total - this is mandatory
+2. Distribute queries EVENLY across these ${categories.length} categories (approximately ${queriesPerCategory} queries per category):
+${categories.map((cat, idx) => `   ${idx + 1}. ${cat}`).join('\n')}
+
+3. NEVER include company names or brand names in queries
+4. Ensure complete deduplication - no exact, near, or semantic duplicates
+5. Expand across subtopics: strategy, automation, measurement, personalization, tooling, compliance, data, reporting, integration, workflows, KPIs
+6. Ensure diversity of structure and intent
+7. Each query must be assigned to ONE of the ${categories.length} categories listed above
+8. For query_format field, use exactly one of these: "Natural-language questions" or "Keyword phrases"
+9. Each query must be assigned to ONE target audience from: ${audiences}
+
+Return a JSON array with EXACTLY ${count} items in this structure:
+[
+  {
+    "query_id": 1,
+    "query_text": "...",
+    "query_type": "Educational or Service-Aligned",
+    "query_category": "one of the ${categories.length} categories listed above",
+    "query_format": "Natural-language questions or Keyword phrases",
+    "target_audience": "one of: ${audiences}"
+  },
+  ... (continue until you have ${count} queries)
+]
+
+IMPORTANT: The array MUST contain exactly ${count} query objects. Count them to make sure.`;
+
+      const response = await InvokeLLM({
+        prompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            queries: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  query_id: { type: "number" },
+                  query_text: { type: "string" },
+                  query_type: { type: "string" },
+                  query_category: { type: "string" },
+                  query_format: { type: "string" },
+                  target_audience: { type: "string" }
+                }
+              }
+            }
+          }
+        }
       });
 
-      // Frontend action is complete, now waiting for backend process
-      setGenerationProgress(100);
-      setGenerationStatus('Generation started! Queries are being generated in the background.');
-      setShowSuccessBanner(true); // Show success banner after initiation
+      let generatedQueries = response.queries || [];
+      setGenerationProgress(50);
+      setGenerationStatus(`Generated ${generatedQueries.length} queries, checking if more needed...`);
 
-      // Start polling for updates
-      const pollInterval = setInterval(async () => {
-        try {
-          // Invalidate project and queries cache to ensure fresh data for polling
-          // These are fire-and-forget, the `get` and `filter` below will ensure fresh data
-          // if the invalidation has completed by then.
-          queryClient.invalidateQueries({ queryKey: ['project', projectId] });
-          queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
+      // If we didn't get enough queries, generate more to reach the target
+      let attempts = 0;
+      while (generatedQueries.length < count && attempts < 3) {
+        attempts++;
+        const remaining = count - generatedQueries.length;
+        setGenerationStatus(`Generating ${remaining} more queries (attempt ${attempts}/3)...`);
+        setGenerationProgress(50 + (attempts * 10));
 
-          const updatedProject = await base44.entities.QueryProject.get(projectId);
-          const currentQueries = await base44.entities.Query.filter({ project_id: projectId });
+        const additionalPrompt = `Generate EXACTLY ${remaining} MORE unique AEO queries for:
+Audience: ${audiences}
+Themes: ${project.themes}
+Query Mix: ${project.query_mix_type}${project.query_mix_type === 'Mixed' ? ` (${project.educational_ratio}% Educational, ${project.service_ratio}% Service-Aligned)` : ''}
+Categories to distribute across: ${categories.join(', ')}
 
-          if (updatedProject.status === 'queries_generated') {
-            clearInterval(pollIntervalRef.current);
-            clearTimeout(timeoutCleanupRef.current); // Clear the timeout as well
-            setGenerationStatus(`Complete! Generated ${currentQueries.length} queries.`);
-            setIsGenerating(false); // Generation is fully complete now
+These queries must be:
+1. Different from any previous queries
+2. Distributed across the categories mentioned above
+3. Format: ${formatInstruction}
+4. No brand names or company names.
+5. Ensure diversity of structure and intent.
+6. Each query must be assigned to ONE of the categories.
+7. Each query must be assigned to ONE target audience from: ${audiences}
 
-            // Ensure cache is fresh for subsequent steps
-            queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
-            queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+Return JSON array with exactly ${remaining} queries using this structure:
+[{"query_id": ${generatedQueries.length + 1}, "query_text": "...", "query_type": "Educational or Service-Aligned", "query_category": "one of the categories", "query_format": "Natural-language questions or Keyword phrases", "target_audience": "one of the audiences"}]`;
 
-            // Navigate to Step 2 after successful generation
-            setTimeout(() => {
-              navigate(createPageUrl(`Step2?projectId=${projectId}&success=true`));
-            }, 1500); // Give a little time for final status message to be seen
-          } else if (updatedProject.status === 'generation_failed') {
-            clearInterval(pollIntervalRef.current);
-            clearTimeout(timeoutCleanupRef.current);
-            setGenerationStatus('Generation failed. Please try again.');
-            setIsGenerating(false);
-          } else {
-            // Update progress based on how many queries exist
-            // Min progress is 10 (from initial call), then scale based on generated queries up to 95%.
-            // The last 5% will be for finalization after status 'queries_generated'.
-            const progress = Math.min(95, 10 + (currentQueries.length / count) * 85);
-            setGenerationProgress(Math.floor(progress));
-            setGenerationStatus(`Generating queries... (${currentQueries.length} / ${count})`);
+        const additionalResponse = await InvokeLLM({
+          prompt: additionalPrompt,
+          response_json_schema: {
+            type: "object",
+            properties: {
+              queries: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    query_id: { type: "number" },
+                    query_text: { type: "string" },
+                    query_type: { type: "string" },
+                    query_category: { type: "string" },
+                    query_format: { type: "string" },
+                    target_audience: { type: "string" }
+                  }
+                }
+              }
+            }
           }
-        } catch (error) {
-          console.error('Polling error:', error);
-          // If polling itself errors, perhaps stop polling after a few attempts or clear the interval
-          // For now, let's just log and continue polling unless project status changes.
-        }
-      }, 3000); // Poll every 3 seconds
-      pollIntervalRef.current = pollInterval; // Store interval ID
+        });
 
-      // Clean up interval after 5 minutes in case it never completes or errors out
-      const timeoutId = setTimeout(() => {
-        clearInterval(pollIntervalRef.current);
-        console.warn('Query generation polling timed out after 5 minutes.');
-        // Only update status if still indicating active generation
-        if (generationStatus.includes('Generating queries...') || generationProgress < 100) {
-          setGenerationStatus('Generation is taking longer than expected. Please check back later.');
+        if (additionalResponse.queries && additionalResponse.queries.length > 0) {
+          generatedQueries = [...generatedQueries, ...additionalResponse.queries];
+          setGenerationStatus(`Generated ${generatedQueries.length} / ${count} queries...`);
         }
-        setIsGenerating(false); // Allow user to try again or navigate
-      }, 5 * 60 * 1000); // 5 minutes
-      timeoutCleanupRef.current = timeoutId; // Store timeout ID
+      }
+
+      // Ensure queries are capped at count and have sequential query_id from 1
+      generatedQueries = generatedQueries.slice(0, count).map((q, idx) => ({
+        ...q,
+        query_id: idx + 1
+      }));
+
+      setGenerationStatus('Saving queries to database...');
+      setGenerationProgress(85);
+
+      // Save queries to database
+      await base44.entities.Query.bulkCreate(
+        generatedQueries.map(q => ({
+          project_id: projectId,
+          query_id: q.query_id,
+          query_text: q.query_text,
+          query_type: q.query_type,
+          query_category: q.query_category,
+          query_format: q.query_format,
+          target_audience: q.target_audience,
+          analysis_status: 'pending'
+        }))
+      );
+
+      setGenerationStatus('Finalizing...');
+      setGenerationProgress(95);
+
+      // Update project with query count and status
+      await updateProjectMutation.mutateAsync({
+        id: projectId,
+        data: {
+          total_queries: generatedQueries.length,
+          status: 'queries_generated',
+        },
+      });
+
+      setGenerationProgress(100);
+      setGenerationStatus(`Complete! Generated ${generatedQueries.length} queries.`);
+      setShowSuccessBanner(true);
+
+      // Invalidate queries to ensure fresh data
+      queryClient.invalidateQueries({ queryKey: ['queries', projectId] });
+      queryClient.invalidateQueries({ queryKey: ['project', projectId] });
+
+      // Navigate to Step 2 after successful generation
+      setTimeout(() => {
+        navigate(createPageUrl(`Step2?projectId=${projectId}&success=true`));
+      }, 1500);
 
     } catch (error) {
-      console.error('Error initiating query generation:', error);
-      setGenerationStatus('Error occurred during generation initiation.');
+      console.error('Error generating queries:', error);
+      setGenerationStatus('Error occurred during generation. Please try again.');
       setIsGenerating(false);
     }
+
+    setIsGenerating(false);
   };
 
   // handleDownloadCSV is no longer needed as QueryPreview is removed
