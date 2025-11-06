@@ -139,7 +139,7 @@ export default function ProjectCard({ project, onDelete, onRerun, isDeleting, is
             <div>
               <p className="text-slate-500">Created</p>
               <p className="font-medium text-slate-900">
-                {format(new Date(project.created_date), 'MMM d, yyyy')}
+                {project.created_at ? format(new Date(project.created_at), 'MMM d, yyyy') : '-'}
               </p>
             </div>
             <div>
