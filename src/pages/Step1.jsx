@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from "react";
-import { base44 } from "@/api/base44Client";
+import { QueryProject, Query } from "@/api/entities";
 import { InvokeLLM } from "@/api/integrations";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ export default function Step1() {
 
   const { data: project, isLoading: projectLoading } = useQuery({
     queryKey: ['project', projectId],
-    queryFn: () => base44.entities.QueryProject.get(projectId),
+    queryFn: () => QueryProject.get(projectId),
     enabled: !!projectId,
   });
 
@@ -39,12 +39,12 @@ export default function Step1() {
   // The polling mechanism will implicitly fetch them for progress updates, but we don't display a list.
   const { data: queries = [] } = useQuery({
     queryKey: ['queries', projectId],
-    queryFn: () => base44.entities.Query.filter({ project_id: projectId }),
+    queryFn: () => Query.filter({ project_id: projectId }),
     enabled: false, // Keep disabled for direct display, will be fetched during polling
   });
 
   const updateProjectMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.QueryProject.update(id, data),
+    mutationFn: ({ id, data }) => QueryProject.update(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project', projectId] });
     },
@@ -228,7 +228,7 @@ Return JSON array with exactly ${remaining} queries using this structure:
       setGenerationProgress(85);
 
       // Save queries to database
-      await base44.entities.Query.bulkCreate(
+      await Query.bulkCreate(
         generatedQueries.map(q => ({
           project_id: projectId,
           query_id: q.query_id,

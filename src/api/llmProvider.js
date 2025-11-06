@@ -1,39 +1,23 @@
-import { base44 } from './base44Client';
 import { getGeminiModel, geminiClient } from './geminiClient';
 
 /**
  * LLM Provider Configuration
- * Supports 'base44' or 'gemini'
- * Set via VITE_LLM_PROVIDER environment variable
+ * Now uses Gemini API exclusively (base44 support removed)
+ * Set via VITE_GEMINI_API_KEY environment variable
  */
-const LLM_PROVIDER = import.meta.env.VITE_LLM_PROVIDER || 'base44';
+const LLM_PROVIDER = 'gemini';
 
 /**
  * Invoke LLM with structured JSON response
- * Supports both Base44 and Gemini API backends
+ * Uses Gemini API for all LLM operations
  *
  * @param {Object} params
  * @param {string} params.prompt - The prompt to send to the LLM
  * @param {Object} params.response_json_schema - JSON schema for structured response
- * @param {string} [params.provider] - Override default provider ('base44' or 'gemini')
  * @returns {Promise<Object>} Parsed JSON response matching the schema
  */
-export async function InvokeLLM({ prompt, response_json_schema, provider = LLM_PROVIDER }) {
-  if (provider === 'gemini') {
-    return await invokeGemini({ prompt, response_json_schema });
-  } else {
-    return await invokeBase44({ prompt, response_json_schema });
-  }
-}
-
-/**
- * Invoke Base44 LLM
- */
-async function invokeBase44({ prompt, response_json_schema }) {
-  return await base44.integrations.Core.InvokeLLM({
-    prompt,
-    response_json_schema
-  });
+export async function InvokeLLM({ prompt, response_json_schema }) {
+  return await invokeGemini({ prompt, response_json_schema });
 }
 
 /**
@@ -41,7 +25,16 @@ async function invokeBase44({ prompt, response_json_schema }) {
  */
 async function invokeGemini({ prompt, response_json_schema }) {
   if (!geminiClient) {
-    throw new Error('Gemini API key not configured. Set VITE_GEMINI_API_KEY in your .env file');
+    throw new Error(
+      'Gemini API key not configured.\n\n' +
+      '🔑 Required Environment Variable:\n' +
+      '   VITE_GEMINI_API_KEY=your_api_key_here\n\n' +
+      '📝 To fix:\n' +
+      '   1. Create/update .env.local file in project root\n' +
+      '   2. Add: VITE_GEMINI_API_KEY=your_key\n' +
+      '   3. Get API key from: https://aistudio.google.com/app/apikey\n' +
+      '   4. Restart development server'
+    );
   }
 
   try {
@@ -78,28 +71,32 @@ async function invokeGemini({ prompt, response_json_schema }) {
     }
   } catch (error) {
     console.error('Gemini API Error:', error);
+
+    // Provide helpful error messages
+    if (error.message && error.message.includes('API key')) {
+      throw new Error(
+        'Invalid Gemini API key.\n\n' +
+        'Please verify your VITE_GEMINI_API_KEY in .env.local\n' +
+        'Get a new key from: https://aistudio.google.com/app/apikey'
+      );
+    }
+
     throw new Error(`Gemini API call failed: ${error.message}`);
   }
 }
 
 /**
  * Get current LLM provider
- * @returns {string} Current provider ('base44' or 'gemini')
+ * @returns {string} Current provider (always 'gemini')
  */
 export function getCurrentProvider() {
   return LLM_PROVIDER;
 }
 
 /**
- * Check if a specific provider is available
- * @param {string} provider - Provider name ('base44' or 'gemini')
+ * Check if Gemini provider is available
  * @returns {boolean}
  */
-export function isProviderAvailable(provider) {
-  if (provider === 'base44') {
-    return !!base44;
-  } else if (provider === 'gemini') {
-    return !!geminiClient;
-  }
-  return false;
+export function isProviderAvailable() {
+  return !!geminiClient;
 }

@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { base44 } from "@/api/base44Client";
+import { QueryProject } from "@/api/entities";
 
 export default function ActionableInsights({ queries, companyUrl, brandMentionCount, sourceAppearanceCount, competitorUrls, project }) {
   const [editingIndex, setEditingIndex] = useState(null);
@@ -336,7 +336,7 @@ export default function ActionableInsights({ queries, companyUrl, brandMentionCo
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      await base44.entities.QueryProject.update(project.id, {
+      await QueryProject.update(project.id, {
         custom_recommendations: recommendations
       });
       setEditedRecommendations(recommendations);
