@@ -31,6 +31,17 @@ export interface QueryAnalysisSchema {
 }
 
 /**
+ * Generated query schema
+ */
+export interface GeneratedQuerySchema {
+  query_text: string;                                 // Query text
+  query_type: "Educational" | "Service-Aligned";     // Query type
+  query_category: string;                             // Category from 10 options
+  query_format: "Natural-language questions" | "Keyword phrases"; // Query format
+  target_audience: string;                            // Target audience
+}
+
+/**
  * Gemini API request configuration
  */
 export interface GeminiRequestConfig {

@@ -4,6 +4,7 @@ import {
   RetryConfig,
   GeminiRateLimits,
   QueryAnalysisSchema,
+  GeneratedQuerySchema,
   GeminiRequestConfig,
   GeminiResponse,
   ErrorType,
@@ -15,6 +16,7 @@ import {
 
 import {
   validateAndSanitize,
+  validateGeneratedQueries,
   sanitizeErrorMessage,
   generateFallbackResult,
 } from './validation.ts';
@@ -367,4 +369,142 @@ IMPORTANT:
 - query_type must be exactly "Educational" or "Service-Aligned"
 - query_category must be one of the 10 valid categories
 - Return ONLY the JSON object, no additional text`;
+}
+
+/**
+ * Call Gemini API for query generation with retry logic
+ */
+export async function generateQueriesWithRetry(
+  prompt: string,
+  apiKey: string,
+  config: RetryConfig = DEFAULT_RETRY_CONFIG
+): Promise<GeneratedQuerySchema[]> {
+  let lastError: Error | null = null;
+  const retryMetadata: RetryMetadata[] = [];
+
+  for (let attempt = 0; attempt <= config.maxRetries; attempt++) {
+    try {
+      // Call Gemini API with higher token limit for query generation
+      const response = await callGeminiAPI(prompt, apiKey, {
+        ...DEFAULT_GEMINI_CONFIG,
+        maxOutputTokens: 8192, // Higher limit for generating multiple queries
+        temperature: 0.7, // Higher temperature for more variety
+      });
+
+      // Extract text from response
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!text) {
+        throw new Error('No text content in Gemini response');
+      }
+
+      // Validate and sanitize array of queries
+      const validated = validateGeneratedQueries(text);
+
+      // Log success after retries
+      if (attempt > 0) {
+        console.log(
+          `✅ Generated ${validated.length} queries after ${attempt} ${attempt === 1 ? 'retry' : 'retries'}`
+        );
+      } else {
+        console.log(`✅ Generated ${validated.length} queries on first attempt`);
+      }
+
+      return validated;
+
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const errorType = detectErrorType(lastError);
+
+      // Record retry metadata
+      retryMetadata.push({
+        attempt,
+        totalAttempts: config.maxRetries,
+        delay: 0,
+        errorType,
+        errorMessage: sanitizeErrorMessage(lastError),
+      });
+
+      // Don't retry if we're out of attempts
+      if (attempt >= config.maxRetries) {
+        console.error(
+          `❌ Query generation failed after ${config.maxRetries + 1} attempts:`,
+          retryMetadata
+        );
+        break;
+      }
+
+      // Check if we should retry this error
+      if (!shouldRetry(errorType)) {
+        console.error(`🚫 Non-retryable error (${errorType}):`, lastError.message);
+        throw lastError;
+      }
+
+      // Calculate delay
+      const delay = calculateRetryDelay(attempt, config, errorType);
+      retryMetadata[retryMetadata.length - 1].delay = delay;
+
+      // Log retry attempt
+      console.log(
+        `🔄 Retry ${attempt + 1}/${config.maxRetries} ` +
+        `after ${delay}ms (${errorType}): ${lastError.message.substring(0, 100)}`
+      );
+
+      // Wait before retry
+      await sleep(delay);
+    }
+  }
+
+  // All retries exhausted
+  throw lastError || new Error('Query generation failed after max retries');
+}
+
+/**
+ * Generate query generation prompt
+ */
+export function buildQueryGenerationPrompt(project: any): string {
+  const sampleSize = project.total_queries || 20;
+  const educationalRatio = project.educational_ratio || 50;
+  const serviceRatio = project.service_ratio || 50;
+
+  return `Generate ${sampleSize} Answer Engine Optimization (AEO) queries for analysis.
+
+Company: ${project.company_url || 'Not specified'}
+Competitors: ${project.competitor_urls?.join(', ') || 'Not specified'}
+Target Audience: ${project.audience?.join(', ') || 'General audience'}
+Focus Areas: ${project.themes || 'General topics'}
+Query Mix: ${educationalRatio}% Educational, ${serviceRatio}% Service-Aligned
+
+Requirements:
+- Mix of natural language questions and keyword phrases
+- Cover all 10 query categories:
+  1. Industry monitoring
+  2. Competitor benchmarking
+  3. Operational training
+  4. Foundational understanding
+  5. Real-world learning examples
+  6. Educational — people-focused
+  7. Trend explanation
+  8. Pain-point focused — commercial intent
+  9. Product or vendor-related — lead intent
+  10. Decision-stage — ready to buy or engage
+
+${project.manual_queries?.length > 0 ? `Include these manual queries: ${project.manual_queries.join(', ')}` : ''}
+
+Output as a JSON array with this exact format:
+[
+  {
+    "query_text": "Example query text here",
+    "query_type": "Educational",
+    "query_category": "Industry monitoring",
+    "query_format": "Natural-language questions",
+    "target_audience": "Business professionals"
+  }
+]
+
+IMPORTANT:
+- query_type must be exactly "Educational" or "Service-Aligned"
+- query_category must be one of the 10 categories listed above
+- query_format must be exactly "Natural-language questions" or "Keyword phrases"
+- Return ONLY the JSON array, no additional text`;
 }
