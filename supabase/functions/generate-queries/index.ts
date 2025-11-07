@@ -1,8 +1,18 @@
 // generateQueries - Supabase Edge Function
-// Generates AEO queries based on project configuration using LLM
+// Generates AEO queries based on project configuration using LLM with retry logic and rate limiting
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  generateQueriesWithRetry,
+  buildQueryGenerationPrompt,
+  rateLimiter,
+} from "../_shared/gemini-helper.ts";
+import {
+  DEFAULT_RETRY_CONFIG,
+  GeneratedQuerySchema,
+} from "../_shared/types.ts";
+import { sanitizeErrorMessage } from "../_shared/validation.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,14 +61,47 @@ serve(async (req) => {
       .update({ status: "generating" })
       .eq("id", project_id);
 
-    // Build prompt for LLM
+    console.log(`🚀 Starting query generation for project: ${project.name}`);
+    console.log(`📊 Target: ${project.total_queries || 20} queries`);
+
+    const startTime = Date.now();
+
+    // Build prompt and generate queries with retry logic
     const prompt = buildQueryGenerationPrompt(project);
 
-    // Call Gemini API to generate queries
-    const generatedQueries = await callGeminiAPI(prompt, geminiApiKey);
+    let generatedQueries: GeneratedQuerySchema[];
+    try {
+      // Use rate limiter to throttle request
+      generatedQueries = await rateLimiter.throttle(async () => {
+        return await generateQueriesWithRetry(
+          prompt,
+          geminiApiKey,
+          DEFAULT_RETRY_CONFIG
+        );
+      });
+    } catch (error) {
+      // Update project status to 'error' if generation fails
+      await supabase
+        .from("query_projects")
+        .update({
+          status: "error",
+          metadata: {
+            error_message: sanitizeErrorMessage(error),
+            failed_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", project_id);
+
+      throw new Error(
+        `Query generation failed after ${DEFAULT_RETRY_CONFIG.maxRetries + 1} attempts: ${error.message}`
+      );
+    }
+
+    const duration = Date.now() - startTime;
+    console.log(`✅ Generated ${generatedQueries.length} queries in ${duration}ms`);
 
     // Insert queries into database
-    const queriesWithProjectId = generatedQueries.map((q: any, index: number) => ({
+    const queriesWithProjectId = generatedQueries.map((q, index) => ({
       project_id: project_id,
       query_id: index + 1,
       query_text: q.query_text,
@@ -73,7 +116,20 @@ serve(async (req) => {
       .from("queries")
       .insert(queriesWithProjectId);
 
-    if (insertError) throw insertError;
+    if (insertError) {
+      await supabase
+        .from("query_projects")
+        .update({
+          status: "error",
+          metadata: {
+            error_message: `Database insert failed: ${insertError.message}`,
+            failed_at: new Date().toISOString(),
+          },
+        })
+        .eq("id", project_id);
+
+      throw new Error(`Failed to insert queries: ${insertError.message}`);
+    }
 
     // Update project status to 'queries_generated'
     await supabase
@@ -82,14 +138,21 @@ serve(async (req) => {
         status: "queries_generated",
         total_queries: generatedQueries.length,
         current_step: 2,
+        metadata: {
+          generated_at: new Date().toISOString(),
+          generation_duration_ms: duration,
+        },
       })
       .eq("id", project_id);
+
+    console.log(`✅ Successfully saved ${generatedQueries.length} queries to database`);
 
     return new Response(
       JSON.stringify({
         success: true,
         count: generatedQueries.length,
         message: `Successfully generated ${generatedQueries.length} queries`,
+        duration_ms: duration,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -97,7 +160,7 @@ serve(async (req) => {
       }
     );
   } catch (error) {
-    console.error("Error in generate-queries:", error);
+    console.error("❌ Error in generate-queries:", error);
     return new Response(
       JSON.stringify({
         error: error.message,
@@ -110,93 +173,3 @@ serve(async (req) => {
     );
   }
 });
-
-function buildQueryGenerationPrompt(project: any): string {
-  const sampleSize = project.total_queries || 20;
-  const educationalRatio = project.educational_ratio || 50;
-  const serviceRatio = project.service_ratio || 50;
-
-  return `Generate ${sampleSize} Answer Engine Optimization (AEO) queries for analysis.
-
-Company: ${project.company_url || "Not specified"}
-Competitors: ${project.competitor_urls?.join(", ") || "Not specified"}
-Target Audience: ${project.audience?.join(", ") || "General audience"}
-Focus Areas: ${project.themes || "General topics"}
-Query Mix: ${educationalRatio}% Educational, ${serviceRatio}% Service-Aligned
-
-Requirements:
-- Mix of natural language questions and keyword phrases
-- Cover all 10 query categories:
-  1. Industry monitoring
-  2. Competitor benchmarking
-  3. Operational training
-  4. Foundational understanding
-  5. Real-world learning examples
-  6. Educational — people-focused
-  7. Trend explanation
-  8. Pain-point focused — commercial intent
-  9. Product or vendor-related — lead intent
-  10. Decision-stage — ready to buy or engage
-
-${project.manual_queries?.length > 0 ? `Include these manual queries: ${project.manual_queries.join(", ")}` : ""}
-
-Output as a JSON array with this exact format:
-[
-  {
-    "query_text": "Example query text here",
-    "query_type": "Educational",
-    "query_category": "Industry monitoring",
-    "query_format": "Natural-language questions",
-    "target_audience": "Business professionals"
-  }
-]
-
-IMPORTANT:
-- query_type must be exactly "Educational" or "Service-Aligned"
-- query_category must be one of the 10 categories listed above
-- query_format must be exactly "Natural-language questions" or "Keyword phrases"
-- Return ONLY the JSON array, no additional text`;
-}
-
-async function callGeminiAPI(prompt: string, apiKey: string): Promise<any[]> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: prompt,
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 8192,
-          responseMimeType: "application/json",
-        },
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  const text = data.candidates[0].content.parts[0].text;
-
-  try {
-    return JSON.parse(text);
-  } catch (parseError) {
-    console.error("Failed to parse LLM response:", text);
-    throw new Error("Failed to parse LLM response as JSON");
-  }
-}
